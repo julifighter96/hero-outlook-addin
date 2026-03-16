@@ -14,9 +14,9 @@
   <!-- Display Name -->
   <DisplayName DefaultValue="HERO Integration"/>
   <Description DefaultValue="E-Mails und Anhänge direkt zu HERO-Projekten hochladen"/>
-  <IconUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-80.png"/>
-  <SupportUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/support"/>
+  <IconUrl DefaultValue="https://hero-outlook-addin.vercel.app/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://hero-outlook-addin.vercel.app/assets/icon-80.png"/>
+  <SupportUrl DefaultValue="https://hero-outlook-addin.vercel.app/support"/>
 
   <!-- App Domains -->
   <AppDomains>
@@ -39,7 +39,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/taskpane.html"/>
+        <SourceLocation DefaultValue="https://hero-outlook-addin.vercel.app/taskpane.html"/>
         <RequestedHeight>450</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -108,13 +108,13 @@
       <!-- Resources -->
       <Resources>
         <bt:Images>
-          <bt:Image id="Icon.16x16" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-16.png"/>
-          <bt:Image id="Icon.32x32" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-32.png"/>
-          <bt:Image id="Icon.80x80" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-80.png"/>
+          <bt:Image id="Icon.16x16" DefaultValue="https://hero-outlook-addin.vercel.app/assets/icon-16.png"/>
+          <bt:Image id="Icon.32x32" DefaultValue="https://hero-outlook-addin.vercel.app/assets/icon-32.png"/>
+          <bt:Image id="Icon.80x80" DefaultValue="https://hero-outlook-addin.vercel.app/assets/icon-80.png"/>
         </bt:Images>
         <bt:Urls>
-          <bt:Url id="Commands.Url" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/commands.html"/>
-          <bt:Url id="Taskpane.Url" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/taskpane.html"/>
+          <bt:Url id="Commands.Url" DefaultValue="https://hero-outlook-addin.vercel.app/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://hero-outlook-addin.vercel.app/taskpane.html"/>
         </bt:Url>
         <bt:ShortStrings>
           <bt:String id="GroupLabel" DefaultValue="HERO"/>
