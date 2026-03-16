@@ -320,7 +320,13 @@ function generateEmailPdf() {
   doc.setFontSize(9);
   doc.setTextColor(26, 29, 35);
 
-  for (const line of doc.splitTextToSize((mailData.body || "").substring(0, 8000), maxW)) {
+  const bodyText = (mailData.body || "").substring(0, 8000);
+  // Erst nach echten Zeilenumbrüchen splitten, dann jede Zeile nach Breite umbrechen
+  const bodyLines = bodyText
+    .split(/\r?\n/)
+    .flatMap((line) => doc.splitTextToSize(line || " ", maxW));
+
+  for (const line of bodyLines) {
     if (y > 275) { doc.addPage(); y = 20; }
     doc.text(line, margin, y);
     y += 4.5;
