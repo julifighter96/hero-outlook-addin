@@ -489,46 +489,35 @@ async function submitToHero() {
   }
 }
 
-// Gecachte Argument-Namen für add_logbook_entry
-let logbookArgs = null;
+// Gecachte Felder von LogbookEntryInput
+let logbookInputFields = null;
 
-async function resolveLogbookArgs() {
-  if (logbookArgs) return logbookArgs;
+async function resolveLogbookInputFields() {
+  if (logbookInputFields) return logbookInputFields;
 
   const result = await heroQuery(`{
-    __schema {
-      mutationType {
-        fields {
-          name
-          args { name type { name kind ofType { name } } }
-        }
-      }
+    __type(name: "LogbookEntryInput") {
+      inputFields { name type { name kind ofType { name } } }
     }
   }`);
 
-  const fields = result?.data?.__schema?.mutationType?.fields || [];
-  const mut = fields.find((f) => f.name === "add_logbook_entry");
+  const fields = result?.data?.__type?.inputFields || [];
+  console.log("LogbookEntryInput fields:", fields.map((f) => f.name));
 
-  if (!mut) throw new Error("Mutation add_logbook_entry nicht im Schema gefunden.");
-
-  console.log("add_logbook_entry args:", mut.args.map((a) => a.name));
-
-  // Argument-Namen flexibel erkennen
   const find = (keywords) =>
-    mut.args.find((a) => keywords.some((kw) => a.name.toLowerCase().includes(kw)))?.name;
+    fields.find((f) => keywords.some((kw) => f.name.toLowerCase().includes(kw)))?.name;
 
-  logbookArgs = {
-    projectId: find(["project_match_id", "project_id", "projectmatch", "project"]),
-    message:   find(["message", "text", "content", "body", "note"]),
+  logbookInputFields = {
+    projectId: find(["project_match_id", "project_id", "projectmatch", "match_id"]),
+    message:   find(["message", "text", "content", "body", "note", "entry"]),
   };
 
-  if (!logbookArgs.projectId || !logbookArgs.message) {
-    throw new Error(
-      `Konnte Argument-Namen nicht zuordnen. Verfügbar: ${mut.args.map((a) => a.name).join(", ")}`
-    );
+  if (!logbookInputFields.projectId || !logbookInputFields.message) {
+    const available = fields.map((f) => f.name).join(", ");
+    throw new Error(`LogbookEntryInput-Felder nicht erkannt. Verfügbar: ${available}`);
   }
 
-  return logbookArgs;
+  return logbookInputFields;
 }
 
 async function createLogbookEntry() {
@@ -553,14 +542,19 @@ async function createLogbookEntry() {
     parts.push(body);
   }
 
-  const args = await resolveLogbookArgs();
+  const f = await resolveLogbookInputFields();
   const message = parts.join("\n");
 
   const result = await heroQuery(`
-    mutation ($pid: Int!, $msg: String!) {
-      add_logbook_entry(${args.projectId}: $pid, ${args.message}: $msg) { id }
+    mutation ($entry: LogbookEntryInput!) {
+      add_logbook_entry(logbook_entry: $entry) { id }
     }
-  `, { pid: selectedProject.id, msg: message });
+  `, {
+    entry: {
+      [f.projectId]: selectedProject.id,
+      [f.message]: message,
+    }
+  });
 
   if (result.errors) {
     throw new Error("Logbuch-Fehler: " + JSON.stringify(result.errors));
@@ -592,58 +586,60 @@ async function uploadAttachment(attachment) {
 }
 
 /**
- * Lädt eine Datei (Base64) via HERO GraphQL hoch.
- * Versucht alle bekannten Mutations-Namen und nutzt ggf. den per Introspection gefundenen.
+ * Zweistufiger HERO-Upload:
+ * 1. Datei per REST an /api/external/v7/file_uploads → UUID
+ * 2. upload_document(file_upload_uuid, target: project_match, target_id) via GraphQL
  */
 async function uploadFileToHero(filename, base64Content, contentType) {
-  // Kandidaten in absteigender Wahrscheinlichkeit
-  const candidates = [
-    uploadMutationName,
-    "upload_project_file",
-    "upload_document",
-    "add_document_to_project",
-    "add_file_to_project_match",
-    "upload_file",
-  ].filter(Boolean);
-
-  for (const mutName of candidates) {
-    try {
-      const result = await heroQuery(`
-        mutation ($projectMatchId: Int!, $filename: String!, $content: String!, $contentType: String!) {
-          ${mutName}(
-            project_match_id: $projectMatchId,
-            filename: $filename,
-            content: $content,
-            content_type: $contentType
-          ) { id }
-        }
-      `, {
-        projectMatchId: selectedProject.id,
+  // Schritt 1: Datei hochladen → UUID
+  let uuid;
+  try {
+    const uploadRes = await fetch("/api/hero?upload=1", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
         filename,
-        content: base64Content,
-        contentType
-      });
+        content_base64: base64Content,
+        content_type: contentType,
+      }),
+    });
 
-      if (!result.errors) {
-        console.log(`Upload erfolgreich via Mutation: ${mutName}`);
-        uploadMutationName = mutName; // Für nächste Uploads merken
-        return result;
-      }
-    } catch (e) {
-      // nächsten Kandidaten versuchen
+    const uploadData = await uploadRes.json();
+    console.log("File upload response:", uploadData);
+
+    uuid = uploadData?.uuid || uploadData?.id || uploadData?.file_upload_uuid;
+
+    if (!uuid) {
+      throw new Error("Keine UUID in Upload-Antwort: " + JSON.stringify(uploadData));
     }
+  } catch (e) {
+    throw new Error("Datei-Upload fehlgeschlagen: " + e.message);
   }
 
-  // Alle Versuche fehlgeschlagen – als Logbuch-Notiz vermerken
-  console.warn("Kein gültiger Upload-Endpoint gefunden. Bitte HERO Support kontaktieren.");
-  await heroQuery(`
-    mutation ($projectMatchId: Int!, $message: String!) {
-      add_logbook_entry(project_match_id: $projectMatchId, message: $message) { id }
+  // Schritt 2: Dokument mit UUID verknüpfen
+  const result = await heroQuery(`
+    mutation ($uuid: String!, $targetId: Int!, $doc: CustomerDocumentInput!) {
+      upload_document(
+        file_upload_uuid: $uuid,
+        target: project_match,
+        target_id: $targetId,
+        document: $doc
+      ) { id }
     }
   `, {
-    projectMatchId: selectedProject.id,
-    message: `📎 Datei konnte nicht hochgeladen werden: ${filename}\nBitte prüfen Sie die API-Dokumentation für den Upload-Endpoint.`
+    uuid,
+    targetId: selectedProject.id,
+    doc: { name: filename },
   });
+
+  if (result.errors) {
+    throw new Error("upload_document fehlgeschlagen: " + JSON.stringify(result.errors));
+  }
+
+  return result;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
