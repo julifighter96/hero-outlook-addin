@@ -489,6 +489,48 @@ async function submitToHero() {
   }
 }
 
+// Gecachte Argument-Namen für add_logbook_entry
+let logbookArgs = null;
+
+async function resolveLogbookArgs() {
+  if (logbookArgs) return logbookArgs;
+
+  const result = await heroQuery(`{
+    __schema {
+      mutationType {
+        fields {
+          name
+          args { name type { name kind ofType { name } } }
+        }
+      }
+    }
+  }`);
+
+  const fields = result?.data?.__schema?.mutationType?.fields || [];
+  const mut = fields.find((f) => f.name === "add_logbook_entry");
+
+  if (!mut) throw new Error("Mutation add_logbook_entry nicht im Schema gefunden.");
+
+  console.log("add_logbook_entry args:", mut.args.map((a) => a.name));
+
+  // Argument-Namen flexibel erkennen
+  const find = (keywords) =>
+    mut.args.find((a) => keywords.some((kw) => a.name.toLowerCase().includes(kw)))?.name;
+
+  logbookArgs = {
+    projectId: find(["project_match_id", "project_id", "projectmatch", "project"]),
+    message:   find(["message", "text", "content", "body", "note"]),
+  };
+
+  if (!logbookArgs.projectId || !logbookArgs.message) {
+    throw new Error(
+      `Konnte Argument-Namen nicht zuordnen. Verfügbar: ${mut.args.map((a) => a.name).join(", ")}`
+    );
+  }
+
+  return logbookArgs;
+}
+
 async function createLogbookEntry() {
   const parts = [
     "📧 E-Mail zugeordnet",
@@ -511,14 +553,14 @@ async function createLogbookEntry() {
     parts.push(body);
   }
 
+  const args = await resolveLogbookArgs();
+  const message = parts.join("\n");
+
   const result = await heroQuery(`
-    mutation ($projectMatchId: Int!, $message: String!) {
-      add_logbook_entry(project_match_id: $projectMatchId, message: $message) { id }
+    mutation ($pid: Int!, $msg: String!) {
+      add_logbook_entry(${args.projectId}: $pid, ${args.message}: $msg) { id }
     }
-  `, {
-    projectMatchId: selectedProject.id,
-    message: parts.join("\n")
-  });
+  `, { pid: selectedProject.id, msg: message });
 
   if (result.errors) {
     throw new Error("Logbuch-Fehler: " + JSON.stringify(result.errors));
