@@ -7,6 +7,7 @@ const STORAGE_KEY = "hero_addin_apikey";
 
 let apiKey = "";
 let selectedProject = null;
+let currentMode = "existing"; // "existing" | "new"
 let mailData = {};
 let searchTimer = null;
 
@@ -267,6 +268,41 @@ function selectProject(id, nr, name) {
   btn.textContent = `📤 An ${nr} senden`;
 }
 
+// ─── MODE SWITCH ──────────────────────────────────────────────────────────────
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById("modeExisting").style.display = mode === "existing" ? "block" : "none";
+  document.getElementById("modeNew").style.display      = mode === "new"      ? "block" : "none";
+  document.getElementById("tabExisting").classList.toggle("active", mode === "existing");
+  document.getElementById("tabNew").classList.toggle("active", mode === "new");
+
+  const btn = document.getElementById("submitBtn");
+  if (mode === "new") {
+    // Felder aus Mail vorausfüllen
+    prefillNewProjectForm();
+    btn.disabled = false;
+    btn.textContent = "✚ Projekt anlegen & PDF hochladen";
+  } else {
+    btn.disabled = !selectedProject;
+    btn.textContent = selectedProject ? `📤 An ${selectedProject.nr} senden` : "Projekt auswählen...";
+  }
+}
+
+function prefillNewProjectForm() {
+  // E-Mail-Adresse und Name aus der aktuellen Mail vorschlagen
+  if (mailData.from)     document.getElementById("nEmail").value     = mailData.from;
+  if (mailData.fromName) {
+    const parts = mailData.fromName.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      document.getElementById("nFirstName").value = parts.slice(0, -1).join(" ");
+      document.getElementById("nLastName").value  = parts[parts.length - 1];
+    } else {
+      document.getElementById("nFirstName").value = parts[0] || "";
+    }
+  }
+}
+
 // ─── PDF GENERATION ───────────────────────────────────────────────────────────
 
 function generateEmailPdf() {
@@ -338,25 +374,105 @@ function generateEmailPdf() {
 // ─── SUBMIT ───────────────────────────────────────────────────────────────────
 
 async function submitToHero() {
-  if (!selectedProject || !apiKey) return;
+  if (!apiKey) return;
 
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
-  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white"></span> Wird hochgeladen...`;
+  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white"></span> Wird verarbeitet...`;
 
   try {
-    showStatus("loading", "E-Mail als PDF wird generiert und hochgeladen...");
-    const filename = `Email_${sanitizeFilename(mailData.subject)}_${new Date().toISOString().slice(0, 10)}.pdf`;
-    const pdfBase64 = generateEmailPdf();
-    await uploadFileToHero(filename, pdfBase64, "application/pdf");
-
-    showStatus("success", `✅ PDF wurde Projekt ${selectedProject.nr} hinzugefügt!`);
+    if (currentMode === "new") {
+      await handleNewProject();
+    } else {
+      if (!selectedProject) return;
+      await handleExistingProject();
+    }
   } catch (e) {
     showStatus("error", "❌ Fehler: " + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = `📤 An ${selectedProject.nr} senden`;
+    btn.textContent = currentMode === "new"
+      ? "✚ Projekt anlegen & PDF hochladen"
+      : (selectedProject ? `📤 An ${selectedProject.nr} senden` : "Projekt auswählen...");
   }
+}
+
+async function handleExistingProject() {
+  showStatus("loading", "E-Mail als PDF wird generiert und hochgeladen...");
+  const filename = `Email_${sanitizeFilename(mailData.subject)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  await uploadFileToHero(filename, generateEmailPdf(), "application/pdf");
+  showStatus("success", `✅ PDF wurde Projekt ${selectedProject.nr} hinzugefügt!`);
+}
+
+async function handleNewProject() {
+  const email = document.getElementById("nEmail").value.trim();
+  if (!email) {
+    showStatus("error", "❌ E-Mail-Adresse ist Pflichtfeld.");
+    return;
+  }
+
+  // Schritt 1: Projekt anlegen
+  showStatus("loading", "Projekt wird angelegt...");
+  const projectResult = await createNewProject();
+  const projectId = projectResult?.project_match?.id;
+  if (!projectId) {
+    throw new Error("Projekt wurde angelegt, aber keine ID zurückgegeben: " + JSON.stringify(projectResult));
+  }
+
+  // Schritt 2: PDF hochladen
+  showStatus("loading", "E-Mail als PDF wird hochgeladen...");
+  selectedProject = { id: projectId, nr: projectResult?.project_match?.project_nr || String(projectId) };
+  const filename = `Email_${sanitizeFilename(mailData.subject)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  await uploadFileToHero(filename, generateEmailPdf(), "application/pdf");
+
+  showStatus("success", `✅ Projekt ${selectedProject.nr} angelegt und PDF hochgeladen!`);
+}
+
+async function createNewProject() {
+  const payload = {
+    measure: "PRJ",
+    customer: {
+      email:        document.getElementById("nEmail").value.trim(),
+      first_name:   document.getElementById("nFirstName").value.trim() || undefined,
+      last_name:    document.getElementById("nLastName").value.trim()  || undefined,
+      phone_mobile: document.getElementById("nPhone").value.trim()     || undefined,
+    },
+    address: {
+      street:       document.getElementById("nStreet").value.trim() || undefined,
+      zipcode:      document.getElementById("nZip").value.trim()    || undefined,
+      city:         document.getElementById("nCity").value.trim()   || undefined,
+      country_code: "DE",
+    },
+    project_match: {
+      comment:        document.getElementById("nComment").value.trim() || undefined,
+      partner_source: "Outlook Add-In",
+    },
+  };
+
+  // Leere Objekte bereinigen
+  for (const key of ["customer", "address", "project_match"]) {
+    payload[key] = Object.fromEntries(
+      Object.entries(payload[key]).filter(([, v]) => v !== undefined)
+    );
+  }
+
+  const res = await fetch("/api/hero?create=1", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  console.log("createNewProject response:", data);
+
+  if (!res.ok) {
+    throw new Error("Projekt-Anlage fehlgeschlagen: " + JSON.stringify(data));
+  }
+
+  return data;
 }
 
 // ─── UPLOAD ───────────────────────────────────────────────────────────────────

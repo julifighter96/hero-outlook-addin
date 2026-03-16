@@ -72,7 +72,28 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── GraphQL v7 (Suche, Logbuch, Introspection) ────────────────────────────
+  // ── Neues Projekt anlegen: REST v1 ───────────────────────────────────────
+  if (req.query.create === "1") {
+    try {
+      const heroRes = await fetch(
+        "https://login.hero-software.de/api/v1/Projects/create",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(req.body),
+        }
+      );
+      const data = await heroRes.json();
+      return res.status(heroRes.status).json(data);
+    } catch (err) {
+      return res.status(502).json({ error: "Projekt-Anlage fehlgeschlagen", detail: err.message });
+    }
+  }
+
+  // ── GraphQL v7 (Suche, Introspection) ────────────────────────────────────
   try {
     const heroRes = await fetch(
       "https://login.hero-software.de/api/external/v7/graphql",

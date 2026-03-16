@@ -282,6 +282,50 @@
     .project-results::-webkit-scrollbar { width: 5px; }
     .project-results::-webkit-scrollbar-track { background: transparent; }
     .project-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Mode tabs */
+    .mode-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .mode-tab {
+      flex: 1; padding: 9px 12px;
+      background: none; border: none; cursor: pointer;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      color: var(--orange);
+      border-bottom-color: var(--orange);
+    }
+    .mode-tab:hover:not(.active) { color: var(--text-secondary); }
+
+    /* New project form */
+    .form-field { margin-bottom: 10px; }
+    .form-field label {
+      display: block;
+      font-size: 11px; font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.4px;
+      margin-bottom: 3px;
+    }
+    .form-field input, .form-field textarea {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px; font-family: inherit;
+      background: var(--card);
+    }
+    .form-field input:focus, .form-field textarea:focus {
+      outline: none; border-color: var(--orange);
+      box-shadow: 0 0 0 2px var(--orange-light);
+    }
+    .form-field textarea { resize: vertical; min-height: 60px; }
+    .form-row { display: flex; gap: 8px; }
+    .form-row .form-field { flex: 1; }
   </style>
 </head>
 
@@ -329,10 +373,19 @@
       </div>
     </div>
 
-    <!-- Project search -->
+    <!-- Project card with tabs -->
     <div class="card">
-      <div class="card-header">🔍 Projekt auswählen</div>
-      <div class="card-body">
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabExisting" onclick="switchMode('existing')">
+          🔍 Bestehendes Projekt
+        </button>
+        <button class="mode-tab" id="tabNew" onclick="switchMode('new')">
+          ✚ Neues Projekt
+        </button>
+      </div>
+
+      <!-- Existing project search -->
+      <div id="modeExisting" class="card-body">
         <div class="search-wrapper">
           <span class="search-icon">🔍</span>
           <input type="text" id="searchInput"
@@ -342,8 +395,47 @@
         <div class="search-hint" id="searchHint">Mindestens 2 Zeichen eingeben</div>
         <div class="project-results" id="projectResults"></div>
       </div>
-    </div>
 
+      <!-- New project form -->
+      <div id="modeNew" class="card-body" style="display:none;">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Vorname</label>
+            <input type="text" id="nFirstName" placeholder="Max" />
+          </div>
+          <div class="form-field">
+            <label>Nachname</label>
+            <input type="text" id="nLastName" placeholder="Mustermann" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label>E-Mail *</label>
+          <input type="email" id="nEmail" placeholder="max@example.de" />
+        </div>
+        <div class="form-field">
+          <label>Telefon</label>
+          <input type="text" id="nPhone" placeholder="+49 ..." />
+        </div>
+        <div class="form-field">
+          <label>Straße</label>
+          <input type="text" id="nStreet" placeholder="Musterstraße 1" />
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="flex:0 0 90px;">
+            <label>PLZ</label>
+            <input type="text" id="nZip" placeholder="12345" />
+          </div>
+          <div class="form-field">
+            <label>Ort</label>
+            <input type="text" id="nCity" placeholder="Berlin" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Notiz</label>
+          <textarea id="nComment" placeholder="Interne Notiz zum Projekt..."></textarea>
+        </div>
+      </div>
+    </div>
 
     <!-- Submit -->
     <button class="btn btn-primary" id="submitBtn" disabled onclick="submitToHero()">
