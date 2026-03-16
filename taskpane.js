@@ -3,7 +3,7 @@
  * GraphQL-basierte Projektsuche + PDF-Upload
  */
 
-const HERO_GQL = "https://login.hero-software.de/api/external/v7/graphql";
+const HERO_GQL = "/api/hero";
 const STORAGE_KEY = "hero_addin_apikey";
 
 let apiKey = "";
