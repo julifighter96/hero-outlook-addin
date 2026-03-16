@@ -1,440 +1,602 @@
 /**
- * HERO Outlook Add-In
- * taskpane.js - Hauptlogik
+ * HERO Mail Sync – taskpane.js
+ * GraphQL-basierte Projektsuche + PDF-Upload
  */
 
-// HERO API Konfiguration
-const HERO_CONFIG = {
-    apiKey: 'ac_2RsFINoNFGI97t1jCvaiIZTl5DIKg1da',
-    apiUrl: 'https://login.hero-software.de/api/v1',
-    measure: 'PRJ'
-};
+const HERO_GQL = "https://login.hero-software.de/api/external/v7/graphql";
+const STORAGE_KEY = "hero_addin_apikey";
 
-// Globale Variablen
-let currentItem = null;
-let emailData = null;
+let apiKey = "";
+let uploadMutationName = null; // wird per Introspection ermittelt
+let selectedProject = null;
+let mailData = {};
+let searchTimer = null;
 
-/**
- * Office.js Initialize
- */
+// ─── INIT ────────────────────────────────────────────────────────────────────
+
 Office.onReady((info) => {
-    if (info.host === Office.HostType.Outlook) {
-        console.log('HERO Add-In geladen');
-        loadEmailData();
-    }
+  if (info.host === Office.HostType.Outlook) {
+    loadSettings();
+    loadMailData();
+  }
 });
 
-/**
- * E-Mail-Daten laden und anzeigen
- */
-function loadEmailData() {
-    currentItem = Office.context.mailbox.item;
-    
-    if (!currentItem) {
-        showStatus('error', 'Keine E-Mail ausgewählt');
-        return;
-    }
-
-    // E-Mail-Details anzeigen
-    document.getElementById('emailFrom').textContent = currentItem.from?.displayName || currentItem.from?.emailAddress || '-';
-    document.getElementById('emailSubject').textContent = currentItem.subject || '(Kein Betreff)';
-    document.getElementById('emailDate').textContent = currentItem.dateTimeCreated?.toLocaleDateString('de-DE') || '-';
-
-    // Anhänge anzeigen
-    displayAttachments();
-
-    // E-Mail-Body und weitere Daten abrufen
-    getEmailBody();
-    
-    // Projekt-ID aus Betreff extrahieren (falls vorhanden)
-    extractProjectIdFromSubject();
-}
-
-/**
- * E-Mail-Body abrufen
- */
-function getEmailBody() {
-    currentItem.body.getAsync(Office.CoercionType.Text, (result) => {
-        if (result.status === Office.AsyncResultStatus.Succeeded) {
-            emailData = {
-                from: currentItem.from?.emailAddress || '',
-                fromName: currentItem.from?.displayName || '',
-                to: getRecipients(currentItem.to),
-                cc: getRecipients(currentItem.cc),
-                subject: currentItem.subject || '',
-                body: result.value || '',
-                dateReceived: currentItem.dateTimeCreated,
-                hasAttachments: currentItem.attachments.length > 0,
-                attachments: currentItem.attachments
-            };
-        }
-    });
-}
-
-/**
- * Empfänger extrahieren
- */
-function getRecipients(recipients) {
-    if (!recipients || !recipients.length) return [];
-    return recipients.map(r => ({
-        name: r.displayName,
-        email: r.emailAddress
-    }));
-}
-
-/**
- * Anhänge anzeigen
- */
-function displayAttachments() {
-    const attachmentsList = document.getElementById('attachmentsList');
-    const attachments = currentItem.attachments;
-
-    if (!attachments || attachments.length === 0) {
-        return;
-    }
-
-    let html = '<div style="margin-top: 10px;"><strong>Anhänge (' + attachments.length + '):</strong></div>';
-    
-    attachments.forEach(attachment => {
-        const size = formatFileSize(attachment.size);
-        html += `<div class="file-item">${attachment.name} (${size})</div>`;
-    });
-
-    attachmentsList.innerHTML = html;
-}
-
-/**
- * Projekt-ID aus Betreff extrahieren
- */
-function extractProjectIdFromSubject() {
-    const subject = currentItem.subject || '';
-    
-    // Suche nach Mustern wie [HERO-12345] oder [PRJ-2024-001]
-    const patterns = [
-        /\[HERO-(\d+)\]/i,
-        /\[PRJ-(\d{4}-\d+)\]/i,
-        /\[(\d+)\]/,
-        /HERO[:\s-]*(\d+)/i,
-        /PRJ[:\s-]*([\d-]+)/i
-    ];
-
-    for (const pattern of patterns) {
-        const match = subject.match(pattern);
-        if (match && match[1]) {
-            document.getElementById('projectId').value = match[1];
-            return;
-        }
-    }
-}
-
-/**
- * Zu HERO hochladen - Hauptfunktion
- */
-async function uploadToHero() {
-    const projectId = document.getElementById('projectId').value.trim();
-    const documentType = document.getElementById('documentType').value;
-    const notes = document.getElementById('notes').value.trim();
-
-    // Validierung
-    if (!projectId) {
-        showStatus('error', 'Bitte Projekt-ID eingeben');
-        return;
-    }
-
-    if (!emailData) {
-        showStatus('error', 'E-Mail-Daten noch nicht geladen. Bitte warten...');
-        return;
-    }
-
-    // UI blockieren
-    setLoading(true);
-    showStatus('loading', 'E-Mail wird hochgeladen...');
-
-    try {
-        // Schritt 1: E-Mail als Notiz/Kommentar erstellen
-        const emailUploadResult = await createEmailNote(projectId, documentType, notes);
-
-        if (!emailUploadResult.success) {
-            throw new Error(emailUploadResult.error || 'Fehler beim Hochladen der E-Mail');
-        }
-
-        // Schritt 2: Anhänge hochladen (falls vorhanden)
-        if (currentItem.attachments && currentItem.attachments.length > 0) {
-            showStatus('loading', `Lade ${currentItem.attachments.length} Anhang/Anhänge hoch...`);
-            await uploadAttachments(projectId);
-        }
-
-        // Erfolg!
-        showStatus('success', '✅ Erfolgreich zu HERO hochgeladen!');
-        
-        // Optional: Formular zurücksetzen nach 3 Sekunden
-        setTimeout(() => {
-            document.getElementById('notes').value = '';
-            document.getElementById('documentType').value = '';
-        }, 3000);
-
-    } catch (error) {
-        console.error('Upload Fehler:', error);
-        showStatus('error', '❌ Fehler: ' + error.message);
-    } finally {
-        setLoading(false);
-    }
-}
-
-/**
- * E-Mail als Notiz in HERO erstellen
- */
-async function createEmailNote(projectId, documentType, userNotes) {
-    // E-Mail-Inhalt formatieren
-    const emailContent = formatEmailForHero(documentType, userNotes);
-
-    // API-Endpoint (muss an tatsächliche HERO API angepasst werden)
-    const endpoint = `${HERO_CONFIG.apiUrl}/Projects/${projectId}/notes`;
-
-    const payload = {
-        title: `E-Mail: ${emailData.subject}`,
-        content: emailContent,
-        source: 'Outlook Add-In',
-        type: documentType || 'email'
+// Fallback für lokale Tests ohne Outlook
+if (typeof Office === "undefined") {
+  document.addEventListener("DOMContentLoaded", () => {
+    loadSettings();
+    mailData = {
+      subject: "[Test] Anfrage Elektroinstallation Neubau",
+      from: "max.mustermann@example.de",
+      fromName: "Max Mustermann",
+      date: new Date().toLocaleString("de-DE"),
+      body: "Sehr geehrte Damen und Herren,\n\nanbei die Unterlagen für das Projekt.",
+      attachments: []
     };
-
-    try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${HERO_CONFIG.apiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            return {
-                success: false,
-                error: result.message || `HTTP ${response.status}`
-            };
-        }
-
-        return {
-            success: true,
-            data: result
-        };
-
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message
-        };
-    }
+    renderMailPreview();
+  });
 }
 
-/**
- * E-Mail für HERO formatieren
- */
-function formatEmailForHero(documentType, userNotes) {
-    let content = '';
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
 
-    // Header
-    content += `Von: ${emailData.fromName} <${emailData.from}>\n`;
-    content += `An: ${formatRecipientList(emailData.to)}\n`;
-    
-    if (emailData.cc && emailData.cc.length > 0) {
-        content += `CC: ${formatRecipientList(emailData.cc)}\n`;
-    }
-    
-    content += `Datum: ${emailData.dateReceived?.toLocaleString('de-DE') || ''}\n`;
-    content += `Betreff: ${emailData.subject}\n`;
-    
-    if (documentType) {
-        content += `Typ: ${documentType}\n`;
-    }
-    
-    content += '\n';
-    content += '─'.repeat(50) + '\n\n';
+function loadSettings() {
+  try {
+    apiKey = localStorage.getItem(STORAGE_KEY) || "";
+    document.getElementById("apiKeyInput").value = apiKey;
+  } catch (e) {}
 
-    // Body
-    content += emailData.body;
+  updateConnectionUI(apiKey ? "connected" : "disconnected");
 
-    // User Notes
-    if (userNotes) {
-        content += '\n\n';
-        content += '─'.repeat(50) + '\n';
-        content += 'NOTIZEN:\n';
-        content += userNotes;
-    }
-
-    // Anhänge
-    if (emailData.hasAttachments) {
-        content += '\n\n';
-        content += '─'.repeat(50) + '\n';
-        content += `ANHÄNGE (${emailData.attachments.length}):\n`;
-        emailData.attachments.forEach((att, i) => {
-            content += `${i + 1}. ${att.name} (${formatFileSize(att.size)})\n`;
-        });
-    }
-
-    return content;
+  if (!apiKey) {
+    toggleSettings();
+  } else {
+    // Verbindung im Hintergrund testen + Upload-Mutation ermitteln
+    testConnectionAndIntrospect();
+  }
 }
 
-/**
- * Anhänge hochladen
- */
-async function uploadAttachments(projectId) {
-    const attachments = currentItem.attachments;
-    const results = [];
+function saveSettings() {
+  apiKey = document.getElementById("apiKeyInput").value.trim();
+  try { localStorage.setItem(STORAGE_KEY, apiKey); } catch (e) {}
 
-    for (let i = 0; i < attachments.length; i++) {
-        const attachment = attachments[i];
-        
-        try {
-            showStatus('loading', `Lade Anhang ${i + 1}/${attachments.length} hoch: ${attachment.name}...`);
-            
-            // Anhang-Daten abrufen
-            const attachmentData = await getAttachmentContent(attachment.id);
-            
-            // Zu HERO hochladen
-            const uploadResult = await uploadAttachmentToHero(projectId, attachment, attachmentData);
-            
-            results.push({
-                name: attachment.name,
-                success: uploadResult.success
-            });
-
-        } catch (error) {
-            console.error(`Fehler beim Hochladen von ${attachment.name}:`, error);
-            results.push({
-                name: attachment.name,
-                success: false,
-                error: error.message
-            });
-        }
-    }
-
-    return results;
-}
-
-/**
- * Anhang-Inhalt abrufen
- */
-function getAttachmentContent(attachmentId) {
-    return new Promise((resolve, reject) => {
-        currentItem.getAttachmentContentAsync(attachmentId, (result) => {
-            if (result.status === Office.AsyncResultStatus.Succeeded) {
-                resolve(result.value.content); // Base64 encoded
-            } else {
-                reject(new Error('Fehler beim Abrufen des Anhangs'));
-            }
-        });
-    });
-}
-
-/**
- * Anhang zu HERO hochladen
- */
-async function uploadAttachmentToHero(projectId, attachment, base64Data) {
-    // API-Endpoint für Dokument-Upload (muss angepasst werden)
-    const endpoint = `${HERO_CONFIG.apiUrl}/Projects/${projectId}/documents`;
-
-    // Konvertiere Base64 zu Blob
-    const blob = base64ToBlob(base64Data, attachment.contentType);
-
-    // FormData erstellen
-    const formData = new FormData();
-    formData.append('file', blob, attachment.name);
-    formData.append('description', `Anhang aus E-Mail: ${emailData.subject}`);
-    formData.append('source', 'Outlook Add-In');
-
-    try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${HERO_CONFIG.apiKey}`,
-            },
-            body: formData
-        });
-
-        const result = await response.json();
-
-        return {
-            success: response.ok,
-            data: result
-        };
-
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message
-        };
-    }
-}
-
-/**
- * Hilfsfunktionen
- */
-function formatRecipientList(recipients) {
-    if (!recipients || recipients.length === 0) return '';
-    return recipients.map(r => `${r.name} <${r.email}>`).join(', ');
-}
-
-function formatFileSize(bytes) {
-    if (!bytes) return '0 B';
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function base64ToBlob(base64, contentType = '') {
-    const byteCharacters = atob(base64);
-    const byteArrays = [];
-
-    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-        const slice = byteCharacters.slice(offset, offset + 512);
-        const byteNumbers = new Array(slice.length);
-        
-        for (let i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
-        }
-        
-        const byteArray = new Uint8Array(byteNumbers);
-        byteArrays.push(byteArray);
-    }
-
-    return new Blob(byteArrays, { type: contentType });
-}
-
-/**
- * UI Helper
- */
-function showStatus(type, message) {
-    const statusDiv = document.getElementById('statusMsg');
-    statusDiv.className = `status ${type}`;
-    
-    if (type === 'loading') {
-        statusDiv.innerHTML = `<span class="spinner"></span>${message}`;
+  updateConnectionUI("checking");
+  testConnectionAndIntrospect().then((ok) => {
+    if (ok) {
+      showStatus("success", "✅ Verbindung zu HERO erfolgreich!");
+      toggleSettings();
     } else {
-        statusDiv.innerHTML = message;
+      showStatus("error", "❌ Verbindung fehlgeschlagen – API-Key prüfen.");
     }
-    
-    statusDiv.style.display = 'block';
-
-    // Auto-hide nach 5 Sekunden (außer bei loading)
-    if (type !== 'loading') {
-        setTimeout(() => {
-            statusDiv.style.display = 'none';
-        }, 5000);
-    }
+  });
 }
 
-function setLoading(isLoading) {
-    const btn = document.getElementById('uploadBtn');
-    btn.disabled = isLoading;
-    btn.textContent = isLoading ? 'Wird hochgeladen...' : 'Zu HERO hochladen';
+function toggleSettings() {
+  document.getElementById("settingsPanel").classList.toggle("open");
 }
 
-function showSettings() {
-    alert('Einstellungen (TODO): API-Key, Standard-Projekt, etc.');
-    // TODO: Settings-Dialog implementieren
+async function testConnectionAndIntrospect() {
+  try {
+    // Verbindungstest
+    const test = await heroQuery(`{ contacts(limit: 1) { id } }`);
+    if (!test.data) {
+      updateConnectionUI("disconnected");
+      return false;
+    }
+    updateConnectionUI("connected");
+
+    // Upload-Mutation per Introspection ermitteln (einmalig)
+    if (!uploadMutationName) {
+      uploadMutationName = await findUploadMutation();
+    }
+    return true;
+  } catch (e) {
+    updateConnectionUI("disconnected");
+    return false;
+  }
+}
+
+/**
+ * Durchsucht das GraphQL-Schema nach einer File-Upload-Mutation.
+ * Gibt den Mutations-Namen zurück oder null falls nicht gefunden.
+ */
+async function findUploadMutation() {
+  try {
+    const result = await heroQuery(`
+      {
+        __schema {
+          mutationType {
+            fields {
+              name
+              args { name type { name kind ofType { name kind } } }
+            }
+          }
+        }
+      }
+    `);
+
+    const fields = result?.data?.__schema?.mutationType?.fields || [];
+    const keywords = ["upload", "file", "document", "attachment", "pdf"];
+
+    const match = fields.find((f) =>
+      keywords.some((kw) => f.name.toLowerCase().includes(kw))
+    );
+
+    if (match) {
+      console.log("HERO Upload-Mutation gefunden:", match.name, match.args.map(a => a.name));
+      return match.name;
+    }
+  } catch (e) {
+    console.warn("Introspection fehlgeschlagen:", e);
+  }
+  return null;
+}
+
+function updateConnectionUI(state) {
+  const dot = document.getElementById("connDot");
+  const text = document.getElementById("connText");
+  dot.className = "dot " + state;
+  text.textContent = state === "connected" ? "Verbunden" : state === "checking" ? "Prüfe..." : "Nicht verbunden";
+}
+
+// ─── MAIL DATA ────────────────────────────────────────────────────────────────
+
+function loadMailData() {
+  try {
+    const item = Office.context.mailbox.item;
+
+    mailData.subject = item.subject || "(Kein Betreff)";
+    mailData.from = item.from?.emailAddress || "";
+    mailData.fromName = item.from?.displayName || "";
+    mailData.date = item.dateTimeCreated
+      ? item.dateTimeCreated.toLocaleString("de-DE")
+      : "";
+
+    mailData.attachments = [];
+    if (item.attachments) {
+      for (const att of item.attachments) {
+        if (!att.isInline) {
+          mailData.attachments.push({
+            id: att.id,
+            name: att.name,
+            size: att.size,
+            contentType: att.contentType
+          });
+        }
+      }
+    }
+
+    item.body.getAsync(Office.CoercionType.Text, (result) => {
+      mailData.body = result.status === Office.AsyncResultStatus.Succeeded
+        ? result.value
+        : "";
+      renderMailPreview();
+    });
+  } catch (e) {
+    mailData.subject = "Fehler beim Laden";
+    renderMailPreview();
+  }
+}
+
+function renderMailPreview() {
+  document.getElementById("emailSubject").textContent = mailData.subject || "";
+  document.getElementById("emailFrom").textContent =
+    mailData.fromName ? `${mailData.fromName} <${mailData.from}>` : (mailData.from || "–");
+  document.getElementById("emailDate").textContent = mailData.date || "–";
+
+  const row = document.getElementById("attachmentsRow");
+  if (mailData.attachments && mailData.attachments.length > 0) {
+    row.style.display = "flex";
+    row.innerHTML = mailData.attachments.map((a) =>
+      `<span class="att-badge">📎 ${escHtml(a.name)} (${fmtSize(a.size)})</span>`
+    ).join("");
+  }
+}
+
+// ─── GRAPHQL ──────────────────────────────────────────────────────────────────
+
+async function heroQuery(query, variables) {
+  const body = variables
+    ? JSON.stringify({ query, variables })
+    : JSON.stringify({ query });
+
+  const res = await fetch(HERO_GQL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body
+  });
+  return res.json();
+}
+
+// ─── PROJECT SEARCH ──────────────────────────────────────────────────────────
+
+function handleSearch() {
+  const term = document.getElementById("searchInput").value.trim();
+  if (searchTimer) clearTimeout(searchTimer);
+
+  if (term.length < 2) {
+    document.getElementById("projectResults").innerHTML = "";
+    document.getElementById("searchHint").textContent = "Mindestens 2 Zeichen eingeben";
+    return;
+  }
+
+  document.getElementById("searchHint").textContent = "";
+  document.getElementById("projectResults").innerHTML =
+    `<div class="spinner-wrap"><div class="spinner"></div>Suche läuft...</div>`;
+
+  searchTimer = setTimeout(() => searchProjects(term), 350);
+}
+
+async function searchProjects(term) {
+  if (!apiKey) {
+    showStatus("error", "Bitte zuerst API-Key in den Einstellungen hinterlegen.");
+    return;
+  }
+
+  try {
+    // Versuche erst mit search-Parameter
+    const result = await heroQuery(`
+      query ($search: String) {
+        project_matches(search: $search, limit: 25) {
+          id
+          project_nr
+          customer { first_name last_name company_name }
+          address { city }
+          current_project_match_status { name }
+        }
+      }
+    `, { search: term });
+
+    if (result.errors) {
+      // Fallback: alle laden und clientseitig filtern
+      const all = await heroQuery(`{
+        project_matches(limit: 200) {
+          id project_nr
+          customer { first_name last_name company_name }
+          address { city }
+          current_project_match_status { name }
+        }
+      }`);
+      const s = term.toLowerCase();
+      const filtered = (all.data?.project_matches || []).filter((p) => {
+        const nr = (p.project_nr || "").toLowerCase();
+        const name = ((p.customer?.company_name || "") +
+          " " + (p.customer?.first_name || "") +
+          " " + (p.customer?.last_name || "")).toLowerCase();
+        const city = (p.address?.city || "").toLowerCase();
+        return nr.includes(s) || name.includes(s) || city.includes(s);
+      });
+      renderProjects(filtered);
+      return;
+    }
+
+    renderProjects(result.data?.project_matches || []);
+  } catch (e) {
+    document.getElementById("projectResults").innerHTML =
+      `<div class="state-msg">Fehler bei der Suche. Verbindung prüfen.</div>`;
+  }
+}
+
+function renderProjects(projects) {
+  const container = document.getElementById("projectResults");
+
+  if (!projects.length) {
+    container.innerHTML = `<div class="state-msg">Keine Projekte gefunden</div>`;
+    return;
+  }
+
+  container.innerHTML = projects.map((p) => {
+    const customerName = p.customer
+      ? (p.customer.company_name ||
+         `${p.customer.first_name || ""} ${p.customer.last_name || ""}`.trim())
+      : "Unbekannt";
+    const status = p.current_project_match_status?.name || "";
+    const sel = selectedProject?.id === p.id ? "selected" : "";
+
+    return `
+      <div class="project-item ${sel}"
+           onclick="selectProject(${p.id}, '${escAttr(p.project_nr || "")}', '${escAttr(customerName)}')">
+        <span class="project-nr">${escHtml(p.project_nr || "—")}</span>
+        <div class="project-info">
+          <div class="project-name">${escHtml(customerName)}</div>
+          <div class="project-status">${escHtml(status)}</div>
+        </div>
+        <div class="project-check"></div>
+      </div>`;
+  }).join("");
+}
+
+function selectProject(id, nr, name) {
+  selectedProject = { id, nr, name };
+
+  // Visuell markieren
+  document.querySelectorAll(".project-item").forEach((el) => el.classList.remove("selected"));
+  event.currentTarget.classList.add("selected");
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = false;
+  btn.textContent = `📤 An ${nr} senden`;
+}
+
+// ─── PDF GENERATION ───────────────────────────────────────────────────────────
+
+/**
+ * Erstellt ein PDF aus den Mail-Daten und gibt es als Base64-String zurück.
+ */
+function generateEmailPdf() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const maxW = pageW - margin * 2;
+  let y = 20;
+
+  // Titel
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(245, 155, 0);
+  doc.text("E-Mail", margin, y);
+  y += 8;
+
+  // Trennlinie
+  doc.setDrawColor(226, 229, 234);
+  doc.line(margin, y, pageW - margin, y);
+  y += 6;
+
+  // Header-Felder
+  doc.setFontSize(10);
+  doc.setTextColor(95, 102, 114);
+
+  const fields = [
+    ["Von:", `${mailData.fromName || ""} <${mailData.from || ""}>`],
+    ["Betreff:", mailData.subject || ""],
+    ["Datum:", mailData.date || ""],
+  ];
+
+  for (const [label, value] of fields) {
+    doc.setFont("helvetica", "bold");
+    doc.text(label, margin, y);
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(value, maxW - 25);
+    doc.text(lines, margin + 22, y);
+    y += lines.length * 5 + 2;
+  }
+
+  if (mailData.attachments && mailData.attachments.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Anhänge:", margin, y);
+    doc.setFont("helvetica", "normal");
+    const attNames = mailData.attachments.map((a) => a.name).join(", ");
+    const lines = doc.splitTextToSize(attNames, maxW - 25);
+    doc.text(lines, margin + 22, y);
+    y += lines.length * 5 + 2;
+  }
+
+  y += 4;
+  doc.setDrawColor(226, 229, 234);
+  doc.line(margin, y, pageW - margin, y);
+  y += 7;
+
+  // Body
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(26, 29, 35);
+
+  const bodyText = (mailData.body || "").substring(0, 8000);
+  const bodyLines = doc.splitTextToSize(bodyText, maxW);
+
+  for (const line of bodyLines) {
+    if (y > 275) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(line, margin, y);
+    y += 4.5;
+  }
+
+  return doc.output("datauristring").split(",")[1]; // Base64
+}
+
+// ─── SUBMIT ───────────────────────────────────────────────────────────────────
+
+async function submitToHero() {
+  if (!selectedProject || !apiKey) return;
+
+  const doLogbook = document.getElementById("optLogbook").checked;
+  const doPdf = document.getElementById("optPdf").checked;
+  const doAttachments = document.getElementById("optAttachments").checked;
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white"></span> Wird gesendet...`;
+
+  try {
+    // 1. Logbuch-Eintrag
+    if (doLogbook) {
+      showStatus("loading", "Logbuch-Eintrag wird erstellt...");
+      await createLogbookEntry();
+    }
+
+    // 2. E-Mail als PDF
+    if (doPdf) {
+      showStatus("loading", "E-Mail als PDF wird generiert und hochgeladen...");
+      await uploadEmailAsPdf();
+    }
+
+    // 3. Anhänge
+    if (doAttachments && mailData.attachments && mailData.attachments.length > 0) {
+      for (let i = 0; i < mailData.attachments.length; i++) {
+        showStatus("loading", `Anhang ${i + 1}/${mailData.attachments.length} wird hochgeladen...`);
+        try {
+          await uploadAttachment(mailData.attachments[i]);
+        } catch (e) {
+          console.warn("Anhang-Upload übersprungen:", mailData.attachments[i].name, e);
+        }
+      }
+    }
+
+    showStatus("success", `✅ E-Mail wurde Projekt ${selectedProject.nr} zugeordnet!`);
+    btn.textContent = `📤 An ${selectedProject.nr} senden`;
+    btn.disabled = false;
+
+  } catch (e) {
+    showStatus("error", "❌ Fehler: " + e.message);
+    btn.textContent = `📤 An ${selectedProject.nr} senden`;
+    btn.disabled = false;
+  }
+}
+
+async function createLogbookEntry() {
+  const parts = [
+    "📧 E-Mail zugeordnet",
+    "─".repeat(40),
+    `Von: ${mailData.fromName || ""} <${mailData.from || ""}>`,
+    `Betreff: ${mailData.subject || ""}`,
+    `Datum: ${mailData.date || ""}`,
+  ];
+
+  if (mailData.attachments && mailData.attachments.length > 0) {
+    parts.push(`Anhänge: ${mailData.attachments.map((a) => a.name).join(", ")}`);
+  }
+
+  parts.push("─".repeat(40));
+
+  if (mailData.body) {
+    const body = mailData.body.length > 3000
+      ? mailData.body.substring(0, 3000) + "\n...(gekürzt)"
+      : mailData.body;
+    parts.push(body);
+  }
+
+  const result = await heroQuery(`
+    mutation ($projectMatchId: Int!, $message: String!) {
+      add_logbook_entry(project_match_id: $projectMatchId, message: $message) { id }
+    }
+  `, {
+    projectMatchId: selectedProject.id,
+    message: parts.join("\n")
+  });
+
+  if (result.errors) {
+    throw new Error("Logbuch-Fehler: " + JSON.stringify(result.errors));
+  }
+}
+
+async function uploadEmailAsPdf() {
+  const pdfBase64 = generateEmailPdf();
+  const filename = `Email_${sanitizeFilename(mailData.subject)}_${new Date().toISOString().slice(0,10)}.pdf`;
+  await uploadFileToHero(filename, pdfBase64, "application/pdf");
+}
+
+async function uploadAttachment(attachment) {
+  return new Promise((resolve, reject) => {
+    if (typeof Office !== "undefined" && Office.context?.mailbox) {
+      Office.context.mailbox.item.getAttachmentContentAsync(attachment.id, (result) => {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          uploadFileToHero(attachment.name, result.value.content, attachment.contentType || "application/octet-stream")
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(new Error("Konnte Anhang nicht laden"));
+        }
+      });
+    } else {
+      resolve(); // Test-Modus
+    }
+  });
+}
+
+/**
+ * Lädt eine Datei (Base64) via HERO GraphQL hoch.
+ * Versucht alle bekannten Mutations-Namen und nutzt ggf. den per Introspection gefundenen.
+ */
+async function uploadFileToHero(filename, base64Content, contentType) {
+  // Kandidaten in absteigender Wahrscheinlichkeit
+  const candidates = [
+    uploadMutationName,
+    "upload_project_file",
+    "upload_document",
+    "add_document_to_project",
+    "add_file_to_project_match",
+    "upload_file",
+  ].filter(Boolean);
+
+  for (const mutName of candidates) {
+    try {
+      const result = await heroQuery(`
+        mutation ($projectMatchId: Int!, $filename: String!, $content: String!, $contentType: String!) {
+          ${mutName}(
+            project_match_id: $projectMatchId,
+            filename: $filename,
+            content: $content,
+            content_type: $contentType
+          ) { id }
+        }
+      `, {
+        projectMatchId: selectedProject.id,
+        filename,
+        content: base64Content,
+        contentType
+      });
+
+      if (!result.errors) {
+        console.log(`Upload erfolgreich via Mutation: ${mutName}`);
+        uploadMutationName = mutName; // Für nächste Uploads merken
+        return result;
+      }
+    } catch (e) {
+      // nächsten Kandidaten versuchen
+    }
+  }
+
+  // Alle Versuche fehlgeschlagen – als Logbuch-Notiz vermerken
+  console.warn("Kein gültiger Upload-Endpoint gefunden. Bitte HERO Support kontaktieren.");
+  await heroQuery(`
+    mutation ($projectMatchId: Int!, $message: String!) {
+      add_logbook_entry(project_match_id: $projectMatchId, message: $message) { id }
+    }
+  `, {
+    projectMatchId: selectedProject.id,
+    message: `📎 Datei konnte nicht hochgeladen werden: ${filename}\nBitte prüfen Sie die API-Dokumentation für den Upload-Endpoint.`
+  });
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+function showStatus(type, message) {
+  const bar = document.getElementById("statusBar");
+  bar.className = `status-bar show ${type}`;
+
+  const icon = type === "loading"
+    ? `<div class="spinner" style="width:14px;height:14px;flex-shrink:0"></div>`
+    : "";
+  bar.innerHTML = icon + message;
+
+  if (type !== "loading") {
+    setTimeout(() => bar.classList.remove("show"), 6000);
+  }
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return "?";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+function escHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function escAttr(str) {
+  return String(str).replace(/'/g, "\\'").replace(/"/g, "&quot;");
+}
+
+function sanitizeFilename(str) {
+  return (str || "Mail").replace(/[^a-zA-Z0-9äöüÄÖÜß _-]/g, "_").substring(0, 60);
 }

@@ -1,279 +1,378 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>HERO Integration</title>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HERO Mail Sync</title>
 
-    <!-- Office.js -->
-    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <style>
+    :root {
+      --orange: #f59b00;
+      --orange-light: #fff3db;
+      --orange-hover: #e08e00;
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --border: #e2e5ea;
+      --text: #1a1d23;
+      --text-secondary: #5f6672;
+      --text-muted: #9ca1ab;
+      --success: #16a34a;
+      --success-bg: #f0fdf4;
+      --error: #dc2626;
+      --error-bg: #fef2f2;
+      --radius: 8px;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-        }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
 
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
+    /* Header */
+    .header {
+      background: var(--orange);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: white;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 11px;
+      color: var(--orange);
+      flex-shrink: 0;
+    }
+    .header-title { font-weight: 700; font-size: 14px; color: white; }
+    .header-sub { font-size: 11px; color: rgba(255,255,255,0.85); }
 
-        .subtitle {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 30px;
-        }
+    /* Settings bar */
+    .settings-bar {
+      padding: 6px 16px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .connection-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-secondary);
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .dot.connected { background: var(--success); }
+    .dot.disconnected { background: var(--error); }
+    .dot.checking { background: #f59b00; }
+    .btn-icon {
+      background: none; border: none; cursor: pointer;
+      font-size: 12px; color: var(--text-secondary);
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .btn-icon:hover { background: var(--border); }
 
-        .section {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+    /* Settings panel */
+    .settings-panel {
+      display: none;
+      padding: 14px 16px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-panel.open { display: block; }
+    .settings-panel label {
+      display: block;
+      font-size: 11px; font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .settings-panel input {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px; font-family: monospace;
+      margin-bottom: 10px;
+    }
+    .settings-panel input:focus {
+      outline: none; border-color: var(--orange);
+      box-shadow: 0 0 0 2px var(--orange-light);
+    }
+    .settings-actions { display: flex; gap: 8px; }
 
-        .section h2 {
-            font-size: 16px;
-            color: #333;
-            margin-bottom: 15px;
-        }
+    /* Content */
+    .content { padding: 14px 16px; }
 
-        .form-group {
-            margin-bottom: 15px;
-        }
+    /* Card */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+    .card-body { padding: 12px; }
 
-        label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 5px;
-        }
+    /* Email preview */
+    .email-field { margin-bottom: 4px; font-size: 12px; }
+    .email-field strong { color: var(--text-secondary); font-weight: 600; }
+    .email-subject { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 6px; }
+    .attachments-row {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .att-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 7px;
+      font-size: 11px; color: var(--text-secondary);
+    }
 
-        input[type="text"],
-        select,
-        textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: inherit;
-        }
+    /* Search */
+    .search-wrapper { position: relative; }
+    .search-wrapper input {
+      width: 100%; padding: 9px 12px 9px 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px; font-family: inherit;
+      background: var(--card);
+    }
+    .search-wrapper input:focus {
+      outline: none; border-color: var(--orange);
+      box-shadow: 0 0 0 2px var(--orange-light);
+    }
+    .search-icon {
+      position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted); font-size: 13px;
+      pointer-events: none;
+    }
+    .search-hint {
+      font-size: 11px; color: var(--text-muted);
+      margin-top: 5px;
+    }
 
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #007bff;
-        }
+    /* Project results */
+    .project-results {
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+    .project-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 5px;
+      cursor: pointer;
+      background: var(--card);
+      transition: all 0.12s;
+    }
+    .project-item:hover { border-color: var(--orange); background: var(--orange-light); }
+    .project-item.selected { border-color: var(--orange); background: var(--orange-light); box-shadow: 0 0 0 2px rgba(245,155,0,0.15); }
+    .project-nr {
+      font-family: monospace; font-size: 11px; font-weight: 700;
+      color: var(--orange);
+      background: white; border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 4px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .project-info { flex: 1; min-width: 0; }
+    .project-name {
+      font-weight: 600; font-size: 12px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .project-status { font-size: 11px; color: var(--text-muted); }
+    .project-check {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .project-item.selected .project-check {
+      background: var(--orange); border-color: var(--orange);
+    }
+    .project-item.selected .project-check::after {
+      content: "✓"; color: white; font-size: 10px; font-weight: 700;
+    }
 
-        .info-box {
-            background: #e7f3ff;
-            border-left: 4px solid #2196F3;
-            padding: 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            color: #333;
-            margin-bottom: 15px;
-        }
+    /* State messages */
+    .state-msg {
+      padding: 20px; text-align: center;
+      color: var(--text-muted); font-size: 12px;
+    }
+    .spinner-wrap {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 16px;
+      color: var(--text-muted); font-size: 12px;
+    }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-        .file-list {
-            margin-top: 10px;
-        }
+    /* Options */
+    .option-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 0;
+    }
+    .option-row input[type="checkbox"] {
+      accent-color: var(--orange);
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+    }
+    .option-row label { font-size: 12px; color: var(--text-secondary); cursor: pointer; }
 
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-bottom: 5px;
-            font-size: 13px;
-        }
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 11px 16px;
+      border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-primary { background: var(--orange); color: white; }
+    .btn-primary:hover:not(:disabled) { background: var(--orange-hover); }
+    .btn-primary:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+    .btn-secondary {
+      background: var(--bg); color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-sm { padding: 6px 12px; width: auto; font-size: 12px; }
 
-        .file-item::before {
-            content: "📎";
-            margin-right: 8px;
-        }
+    /* Status bar */
+    .status-bar {
+      display: none;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .status-bar.show { display: flex; align-items: center; gap: 8px; }
+    .status-bar.success { background: var(--success-bg); color: var(--success); border: 1px solid #bbf7d0; }
+    .status-bar.error { background: var(--error-bg); color: var(--error); border: 1px solid #fecaca; }
+    .status-bar.loading { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
 
-        .btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: #0056b3;
-        }
-
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        .status {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 6px;
-            font-size: 14px;
-            display: none;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .status.loading {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .email-preview {
-            font-size: 13px;
-            color: #666;
-            line-height: 1.5;
-        }
-
-        .email-preview strong {
-            color: #333;
-        }
-
-        .settings-link {
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .settings-link a {
-            color: #007bff;
-            text-decoration: none;
-            font-size: 13px;
-        }
-
-        .settings-link a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    /* Scrollbar */
+    .project-results::-webkit-scrollbar { width: 5px; }
+    .project-results::-webkit-scrollbar-track { background: transparent; }
+    .project-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>📧 Zu HERO hochladen</h1>
-        <p class="subtitle">E-Mail und Anhänge zu HERO-Projekt hinzufügen</p>
 
-        <!-- E-Mail Preview -->
-        <div class="section">
-            <h2>Aktuelle E-Mail</h2>
-            <div class="email-preview" id="emailPreview">
-                <div><strong>Von:</strong> <span id="emailFrom">-</span></div>
-                <div><strong>Betreff:</strong> <span id="emailSubject">-</span></div>
-                <div><strong>Datum:</strong> <span id="emailDate">-</span></div>
-            </div>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">H</div>
+    <div>
+      <div class="header-title">HERO Mail Sync</div>
+      <div class="header-sub">E-Mail zu Projekt zuordnen</div>
+    </div>
+  </div>
 
-            <div class="file-list" id="attachmentsList"></div>
-        </div>
+  <!-- Settings bar -->
+  <div class="settings-bar">
+    <div class="connection-status">
+      <span class="dot disconnected" id="connDot"></span>
+      <span id="connText">Nicht verbunden</span>
+    </div>
+    <button class="btn-icon" onclick="toggleSettings()">⚙ Einstellungen</button>
+  </div>
 
-        <!-- Projekt-Auswahl -->
-        <div class="section">
-            <h2>HERO Projekt</h2>
-            
-            <div class="info-box">
-                💡 Tipp: Trage die Projekt-ID oder -Nummer ein (z.B. "PRJ-2024-001" oder "12345")
-            </div>
+  <!-- Settings panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <label>HERO API-Key</label>
+    <input type="password" id="apiKeyInput" placeholder="Bearer Token eingeben..." />
+    <div class="settings-actions">
+      <button class="btn btn-primary btn-sm" onclick="saveSettings()">Speichern & Testen</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleSettings()">Abbrechen</button>
+    </div>
+  </div>
 
-            <div class="form-group">
-                <label for="projectId">Projekt-ID / Nummer *</label>
-                <input type="text" 
-                       id="projectId" 
-                       placeholder="z.B. PRJ-2024-001 oder 12345"
-                       required>
-            </div>
+  <!-- Content -->
+  <div class="content">
 
-            <div class="form-group">
-                <label for="documentType">Dokumenttyp (optional)</label>
-                <select id="documentType">
-                    <option value="">-- Auswählen --</option>
-                    <option value="email">E-Mail</option>
-                    <option value="rechnung">Rechnung</option>
-                    <option value="angebot">Angebot</option>
-                    <option value="bestellung">Bestellung</option>
-                    <option value="lieferschein">Lieferschein</option>
-                    <option value="sonstiges">Sonstiges</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="notes">Notizen (optional)</label>
-                <textarea id="notes" 
-                          rows="3" 
-                          placeholder="Zusätzliche Informationen..."></textarea>
-            </div>
-        </div>
-
-        <!-- Upload Button -->
-        <button class="btn btn-primary" id="uploadBtn" onclick="uploadToHero()">
-            Zu HERO hochladen
-        </button>
-
-        <!-- Status Message -->
-        <div class="status" id="statusMsg"></div>
-
-        <!-- Settings Link -->
-        <div class="settings-link">
-            <a href="#" onclick="showSettings()">⚙️ Einstellungen</a>
-        </div>
+    <!-- Email preview -->
+    <div class="card">
+      <div class="card-header">📧 Aktuelle E-Mail</div>
+      <div class="card-body">
+        <div class="email-subject" id="emailSubject">Wird geladen...</div>
+        <div class="email-field"><strong>Von:</strong> <span id="emailFrom">–</span></div>
+        <div class="email-field"><strong>Datum:</strong> <span id="emailDate">–</span></div>
+        <div class="attachments-row" id="attachmentsRow" style="display:none;"></div>
+      </div>
     </div>
 
-    <script src="taskpane.js"></script>
+    <!-- Project search -->
+    <div class="card">
+      <div class="card-header">🔍 Projekt auswählen</div>
+      <div class="card-body">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput"
+                 placeholder="Projektnr. oder Kundenname..."
+                 oninput="handleSearch()" />
+        </div>
+        <div class="search-hint" id="searchHint">Mindestens 2 Zeichen eingeben</div>
+        <div class="project-results" id="projectResults"></div>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="card">
+      <div class="card-header">⚙ Optionen</div>
+      <div class="card-body">
+        <div class="option-row">
+          <input type="checkbox" id="optPdf" checked />
+          <label for="optPdf">E-Mail als PDF hochladen</label>
+        </div>
+        <div class="option-row">
+          <input type="checkbox" id="optLogbook" checked />
+          <label for="optLogbook">Logbuch-Eintrag erstellen</label>
+        </div>
+        <div class="option-row">
+          <input type="checkbox" id="optAttachments" checked />
+          <label for="optAttachments">Anhänge hochladen</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <button class="btn btn-primary" id="submitBtn" disabled onclick="submitToHero()">
+      Projekt auswählen...
+    </button>
+
+    <!-- Status -->
+    <div class="status-bar" id="statusBar"></div>
+
+  </div>
+
+  <script src="taskpane.js"></script>
 </body>
 </html>
