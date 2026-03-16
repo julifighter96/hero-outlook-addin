@@ -77,7 +77,7 @@ function toggleSettings() {
 async function testConnectionAndIntrospect() {
   try {
     // Verbindungstest
-    const test = await heroQuery(`{ contacts(limit: 1) { id } }`);
+    const test = await heroQuery(`{ contacts(first: 1) { id } }`);
     if (!test.data) {
       updateConnectionUI("disconnected");
       return false;
@@ -269,7 +269,7 @@ async function searchProjects(term) {
     // Versuch 1: project_matches mit search-Parameter
     let projects = await tryQuery(`
       query ($search: String) {
-        project_matches(search: $search, limit: 50) {
+        project_matches(search: $search, first: 50) {
           id project_nr
           customer { first_name last_name company_name }
           address { city }
@@ -280,7 +280,7 @@ async function searchProjects(term) {
     // Versuch 2: project_matches ohne search (clientseitig filtern)
     if (!projects) {
       const all = await tryQuery(`{
-        project_matches(limit: 500) {
+        project_matches(first: 500) {
           id project_nr
           customer { first_name last_name company_name }
           address { city }
@@ -294,7 +294,7 @@ async function searchProjects(term) {
     // Versuch 3: alternatives Query-Feld "projects"
     if (!projects) {
       const all = await tryQuery(`{
-        projects(limit: 500) {
+        projects(first: 500) {
           id project_nr
           customer { first_name last_name company_name }
           address { city }
