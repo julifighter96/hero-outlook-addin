@@ -398,7 +398,18 @@
 
       <!-- New project form -->
       <div id="modeNew" class="card-body" style="display:none;">
+
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:8px;">Kunde</div>
+
         <div class="form-row">
+          <div class="form-field" style="flex:0 0 90px;">
+            <label>Anrede</label>
+            <select id="nTitle" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--card);">
+              <option value="">–</option>
+              <option value="Herr">Herr</option>
+              <option value="Frau">Frau</option>
+            </select>
+          </div>
           <div class="form-field">
             <label>Vorname</label>
             <input type="text" id="nFirstName" placeholder="Max" />
@@ -409,6 +420,10 @@
           </div>
         </div>
         <div class="form-field">
+          <label>Firmenname</label>
+          <input type="text" id="nCompany" placeholder="Muster GmbH" />
+        </div>
+        <div class="form-field">
           <label>E-Mail *</label>
           <input type="email" id="nEmail" placeholder="max@example.de" />
         </div>
@@ -416,6 +431,9 @@
           <label>Telefon</label>
           <input type="text" id="nPhone" placeholder="+49 ..." />
         </div>
+
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin:12px 0 8px;">Kundenadresse</div>
+
         <div class="form-field">
           <label>Straße</label>
           <input type="text" id="nStreet" placeholder="Musterstraße 1" />
@@ -430,9 +448,33 @@
             <input type="text" id="nCity" placeholder="Berlin" />
           </div>
         </div>
+
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin:12px 0 8px;">Projektadresse <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></div>
+
         <div class="form-field">
-          <label>Notiz</label>
-          <textarea id="nComment" placeholder="Interne Notiz zum Projekt..."></textarea>
+          <label>Straße</label>
+          <input type="text" id="nPStreet" placeholder="Baustelle Straße 1" />
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="flex:0 0 90px;">
+            <label>PLZ</label>
+            <input type="text" id="nPZip" placeholder="12345" />
+          </div>
+          <div class="form-field">
+            <label>Ort</label>
+            <input type="text" id="nPCity" placeholder="Berlin" />
+          </div>
+        </div>
+
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin:12px 0 8px;">Projekt</div>
+
+        <div class="form-field">
+          <label>Kommentar (Logbuch)</label>
+          <textarea id="nComment" placeholder="Erscheint im Logbuch des Projekts..."></textarea>
+        </div>
+        <div class="form-field">
+          <label>Interne Notiz</label>
+          <textarea id="nNotes" placeholder="Optionale Hinweise..." style="min-height:44px;"></textarea>
         </div>
       </div>
     </div>

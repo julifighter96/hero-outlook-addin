@@ -429,31 +429,46 @@ async function handleNewProject() {
 }
 
 async function createNewProject() {
+  const val = (id) => document.getElementById(id).value.trim() || undefined;
+
   const payload = {
     measure: "PRJ",
     customer: {
-      email:        document.getElementById("nEmail").value.trim(),
-      first_name:   document.getElementById("nFirstName").value.trim() || undefined,
-      last_name:    document.getElementById("nLastName").value.trim()  || undefined,
-      phone_mobile: document.getElementById("nPhone").value.trim()     || undefined,
+      email:        val("nEmail"),
+      title:        val("nTitle"),
+      first_name:   val("nFirstName"),
+      last_name:    val("nLastName"),
+      company_name: val("nCompany"),
+      phone_mobile: val("nPhone"),
     },
     address: {
-      street:       document.getElementById("nStreet").value.trim() || undefined,
-      zipcode:      document.getElementById("nZip").value.trim()    || undefined,
-      city:         document.getElementById("nCity").value.trim()   || undefined,
+      street:       val("nStreet"),
+      zipcode:      val("nZip"),
+      city:         val("nCity"),
       country_code: "DE",
     },
     project_match: {
-      comment:        document.getElementById("nComment").value.trim() || undefined,
+      comment:        val("nComment"),
+      partner_notes:  val("nNotes"),
       partner_source: "Outlook Add-In",
     },
   };
 
-  // Leere Objekte bereinigen
-  for (const key of ["customer", "address", "project_match"]) {
-    payload[key] = Object.fromEntries(
-      Object.entries(payload[key]).filter(([, v]) => v !== undefined)
-    );
+  // Projektadresse nur wenn mindestens ein Feld ausgefüllt
+  const pStreet = val("nPStreet"), pZip = val("nPZip"), pCity = val("nPCity");
+  if (pStreet || pZip || pCity) {
+    payload.projectaddress = {
+      street: pStreet, zipcode: pZip, city: pCity, country_code: "DE",
+    };
+  }
+
+  // Undefined-Felder aus allen Objekten entfernen
+  for (const key of ["customer", "address", "project_match", "projectaddress"]) {
+    if (payload[key]) {
+      payload[key] = Object.fromEntries(
+        Object.entries(payload[key]).filter(([, v]) => v !== undefined)
+      );
+    }
   }
 
   const res = await fetch("/api/hero?create=1", {
