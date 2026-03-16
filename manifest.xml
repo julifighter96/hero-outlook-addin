@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+           xsi:type="MailApp">
+
+  <!-- Add-In ID (Generiere neue GUID für Produktion) -->
+  <Id>5c10195c-c7ad-4638-9b21-830ac476146d</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Reitermann Consulting</ProviderName>
+  <DefaultLocale>de-DE</DefaultLocale>
+
+  <!-- Display Name -->
+  <DisplayName DefaultValue="HERO Integration"/>
+  <Description DefaultValue="E-Mails und Anhänge direkt zu HERO-Projekten hochladen"/>
+  <IconUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-80.png"/>
+  <SupportUrl DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/support"/>
+
+  <!-- App Domains -->
+  <AppDomains>
+    <AppDomain>https://login.hero-software.de</AppDomain>
+  </AppDomains>
+
+  <!-- Hosts -->
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+
+  <!-- Requirements -->
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.1"/>
+    </Sets>
+  </Requirements>
+
+  <!-- Form Settings -->
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/taskpane.html"/>
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+
+  <!-- Permissions -->
+  <Permissions>ReadWriteItem</Permissions>
+
+  <!-- Rules -->
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+  </Rule>
+
+  <!-- Version Overrides (für Ribbon-Button) -->
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+
+      <!-- Requirements -->
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.3">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+
+      <!-- Hosts -->
+      <Hosts>
+        <Host xsi:type="MailHost">
+
+          <!-- Desktop Form Factor -->
+          <DesktopFormFactor>
+
+            <!-- Function File -->
+            <FunctionFile resid="Commands.Url"/>
+
+            <!-- Extension Point: MessageReadCommandSurface -->
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="msgReadGroup">
+                  <Label resid="GroupLabel"/>
+
+                  <!-- Button: Upload zu HERO -->
+                  <Control xsi:type="Button" id="msgReadOpenPaneButton">
+                    <Label resid="TaskpaneButton.Label"/>
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Label"/>
+                      <Description resid="TaskpaneButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                    </Action>
+                  </Control>
+
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+
+      <!-- Resources -->
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16x16" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-16.png"/>
+          <bt:Image id="Icon.32x32" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-32.png"/>
+          <bt:Image id="Icon.80x80" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/assets/icon-80.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Commands.Url" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://hero-outlook-addin-qol8l3mm1-julian-ventureroxcs-projects.vercel.app/taskpane.html"/>
+        </bt:Url>
+        <bt:ShortStrings>
+          <bt:String id="GroupLabel" DefaultValue="HERO"/>
+          <bt:String id="TaskpaneButton.Label" DefaultValue="Zu HERO hochladen"/>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="E-Mail und Anhänge zu HERO-Projekt hochladen"/>
+        </bt:LongStrings>
+      </Resources>
+
+    </VersionOverrides>
+  </VersionOverrides>
+
+</OfficeApp>

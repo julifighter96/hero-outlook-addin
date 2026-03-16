@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HERO Integration</title>
+
+    <!-- Office.js -->
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section h2 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .file-list {
+            margin-top: 10px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .file-item::before {
+            content: "📎";
+            margin-right: 8px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #0056b3;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .email-preview {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .email-preview strong {
+            color: #333;
+        }
+
+        .settings-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .settings-link a {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .settings-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>📧 Zu HERO hochladen</h1>
+        <p class="subtitle">E-Mail und Anhänge zu HERO-Projekt hinzufügen</p>
+
+        <!-- E-Mail Preview -->
+        <div class="section">
+            <h2>Aktuelle E-Mail</h2>
+            <div class="email-preview" id="emailPreview">
+                <div><strong>Von:</strong> <span id="emailFrom">-</span></div>
+                <div><strong>Betreff:</strong> <span id="emailSubject">-</span></div>
+                <div><strong>Datum:</strong> <span id="emailDate">-</span></div>
+            </div>
+
+            <div class="file-list" id="attachmentsList"></div>
+        </div>
+
+        <!-- Projekt-Auswahl -->
+        <div class="section">
+            <h2>HERO Projekt</h2>
+            
+            <div class="info-box">
+                💡 Tipp: Trage die Projekt-ID oder -Nummer ein (z.B. "PRJ-2024-001" oder "12345")
+            </div>
+
+            <div class="form-group">
+                <label for="projectId">Projekt-ID / Nummer *</label>
+                <input type="text" 
+                       id="projectId" 
+                       placeholder="z.B. PRJ-2024-001 oder 12345"
+                       required>
+            </div>
+
+            <div class="form-group">
+                <label for="documentType">Dokumenttyp (optional)</label>
+                <select id="documentType">
+                    <option value="">-- Auswählen --</option>
+                    <option value="email">E-Mail</option>
+                    <option value="rechnung">Rechnung</option>
+                    <option value="angebot">Angebot</option>
+                    <option value="bestellung">Bestellung</option>
+                    <option value="lieferschein">Lieferschein</option>
+                    <option value="sonstiges">Sonstiges</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="notes">Notizen (optional)</label>
+                <textarea id="notes" 
+                          rows="3" 
+                          placeholder="Zusätzliche Informationen..."></textarea>
+            </div>
+        </div>
+
+        <!-- Upload Button -->
+        <button class="btn btn-primary" id="uploadBtn" onclick="uploadToHero()">
+            Zu HERO hochladen
+        </button>
+
+        <!-- Status Message -->
+        <div class="status" id="statusMsg"></div>
+
+        <!-- Settings Link -->
+        <div class="settings-link">
+            <a href="#" onclick="showSettings()">⚙️ Einstellungen</a>
+        </div>
+    </div>
+
+    <script src="taskpane.js"></script>
+</body>
+</html>
