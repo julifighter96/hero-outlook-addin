@@ -376,33 +376,21 @@ async function uploadFileToHero(filename, base64Content, contentType) {
     throw new Error("Keine UUID erhalten: " + JSON.stringify(uploadData));
   }
 
-  // Schritt 2: upload_document via GraphQL v8
-  const gqlRes = await fetch("/api/hero?v8=1", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `
-        mutation ($uuid: String!, $targetId: Int!) {
-          upload_document(
-            target: project_match,
-            target_id: $targetId,
-            file_upload_uuid: $uuid,
-            document: {}
-          ) { id }
-        }
-      `,
-      variables: { uuid, targetId: selectedProject.id },
-    }),
-  });
+  // Schritt 2: upload_image via GraphQL v7
+  const gqlData = await heroQuery(`
+    mutation ($uuid: String!, $targetId: Int!) {
+      upload_image(
+        file_upload_uuid: $uuid,
+        target: project_match,
+        target_id: $targetId
+      ) { id }
+    }
+  `, { uuid, targetId: selectedProject.id });
 
-  const gqlData = await gqlRes.json();
-  console.log("upload_document response:", gqlData);
+  console.log("upload_image response:", gqlData);
 
   if (gqlData.errors) {
-    throw new Error("upload_document: " + JSON.stringify(gqlData.errors));
+    throw new Error("upload_image: " + JSON.stringify(gqlData.errors));
   }
 
   return gqlData;

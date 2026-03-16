@@ -18,23 +18,36 @@ export default async function handler(req, res) {
   const apiKey = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!apiKey) return res.status(401).json({ error: "Authorization header missing" });
 
-  // ── Datei-Upload: REST v8 → UUID ─────────────────────────────────────────
+  // ── Datei-Upload: REST v8 → gibt UUID zurück ─────────────────────────────
   if (req.query.upload === "1") {
     const { filename, content_base64, content_type } = req.body;
     const buffer = Buffer.from(content_base64, "base64");
 
+    // UUID selbst generieren (wie in der Python-Referenzimplementierung)
+    const fileUuid = crypto.randomUUID();
+
     const boundary = "----HEROBoundary" + Date.now();
     const CRLF = "\r\n";
-    const partHeader =
+
+    // Multipart: field "uuid"
+    const uuidPart =
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="uuid"${CRLF}${CRLF}` +
+      `${fileUuid}${CRLF}`;
+
+    // Multipart: field "file"
+    const filePart =
       `--${boundary}${CRLF}` +
       `Content-Disposition: form-data; name="file"; filename="${filename}"${CRLF}` +
       `Content-Type: ${content_type}${CRLF}${CRLF}`;
-    const partFooter = `${CRLF}--${boundary}--${CRLF}`;
+
+    const footer = `${CRLF}--${boundary}--${CRLF}`;
 
     const body = Buffer.concat([
-      Buffer.from(partHeader, "utf8"),
+      Buffer.from(uuidPart, "utf8"),
+      Buffer.from(filePart, "utf8"),
       buffer,
-      Buffer.from(partFooter, "utf8"),
+      Buffer.from(footer, "utf8"),
     ]);
 
     try {
@@ -52,32 +65,10 @@ export default async function handler(req, res) {
 
       const text = await uploadRes.text();
       console.log("File upload raw response:", text);
-      let data;
-      try { data = JSON.parse(text); } catch { data = { raw: text }; }
-      return res.status(uploadRes.status).json(data);
+      // UUID zurückgeben – egal was HERO antwortet, wir kennen die UUID
+      return res.status(uploadRes.status).json({ uuid: fileUuid, raw: text });
     } catch (err) {
       return res.status(502).json({ error: "Upload fehlgeschlagen", detail: err.message });
-    }
-  }
-
-  // ── GraphQL v8 (upload_document) ──────────────────────────────────────────
-  if (req.query.v8 === "1") {
-    try {
-      const heroRes = await fetch(
-        "https://login.hero-software.de/app/v8/graphql",
-        {
-          method: "POST",
-          headers: {
-            "x-auth-token": apiKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(req.body),
-        }
-      );
-      const data = await heroRes.json();
-      return res.status(heroRes.status).json(data);
-    } catch (err) {
-      return res.status(502).json({ error: "GraphQL v8 fehlgeschlagen", detail: err.message });
     }
   }
 
