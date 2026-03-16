@@ -210,6 +210,34 @@ async function heroQuery(query, variables) {
   return res.json();
 }
 
+/**
+ * Führt eine Query aus und gibt das Daten-Array unter `dataKey` zurück.
+ * Gibt null zurück wenn die Query fehlschlägt oder leer ist.
+ */
+async function tryQuery(query, variables, dataKey) {
+  try {
+    const result = await heroQuery(query, variables);
+    if (result.errors) {
+      console.warn(`Query "${dataKey}" Fehler:`, result.errors);
+      return null;
+    }
+    const data = result.data?.[dataKey];
+    console.log(`Query "${dataKey}" → ${data?.length ?? "?"} Einträge`);
+    return Array.isArray(data) ? data : null;
+  } catch (e) {
+    console.warn(`Query "${dataKey}" Exception:`, e);
+    return null;
+  }
+}
+
+function matchesSearch(p, s) {
+  const nr = (p.project_nr || "").toLowerCase();
+  const company = (p.customer?.company_name || "").toLowerCase();
+  const name = (`${p.customer?.first_name || ""} ${p.customer?.last_name || ""}`).toLowerCase();
+  const city = (p.address?.city || "").toLowerCase();
+  return nr.includes(s) || company.includes(s) || name.includes(s) || city.includes(s);
+}
+
 // ─── PROJECT SEARCH ──────────────────────────────────────────────────────────
 
 function handleSearch() {
@@ -235,47 +263,59 @@ async function searchProjects(term) {
     return;
   }
 
-  try {
-    // Versuche erst mit search-Parameter
-    const result = await heroQuery(`
-      query ($search: String) {
-        project_matches(search: $search, limit: 25) {
-          id
-          project_nr
-          customer { first_name last_name company_name }
-          address { city }
-          current_project_match_status { name }
-        }
-      }
-    `, { search: term });
+  const s = term.toLowerCase();
 
-    if (result.errors) {
-      // Fallback: alle laden und clientseitig filtern
-      const all = await heroQuery(`{
-        project_matches(limit: 200) {
+  try {
+    // Versuch 1: project_matches mit search-Parameter
+    let projects = await tryQuery(`
+      query ($search: String) {
+        project_matches(search: $search, limit: 50) {
           id project_nr
           customer { first_name last_name company_name }
           address { city }
           current_project_match_status { name }
         }
-      }`);
-      const s = term.toLowerCase();
-      const filtered = (all.data?.project_matches || []).filter((p) => {
-        const nr = (p.project_nr || "").toLowerCase();
-        const name = ((p.customer?.company_name || "") +
-          " " + (p.customer?.first_name || "") +
-          " " + (p.customer?.last_name || "")).toLowerCase();
-        const city = (p.address?.city || "").toLowerCase();
-        return nr.includes(s) || name.includes(s) || city.includes(s);
-      });
-      renderProjects(filtered);
+      }`, { search: term }, "project_matches");
+
+    // Versuch 2: project_matches ohne search (clientseitig filtern)
+    if (!projects) {
+      const all = await tryQuery(`{
+        project_matches(limit: 500) {
+          id project_nr
+          customer { first_name last_name company_name }
+          address { city }
+          current_project_match_status { name }
+        }
+      }`, null, "project_matches");
+
+      projects = (all || []).filter((p) => matchesSearch(p, s));
+    }
+
+    // Versuch 3: alternatives Query-Feld "projects"
+    if (!projects) {
+      const all = await tryQuery(`{
+        projects(limit: 500) {
+          id project_nr
+          customer { first_name last_name company_name }
+          address { city }
+          current_project_match_status { name }
+        }
+      }`, null, "projects");
+
+      projects = (all || []).filter((p) => matchesSearch(p, s));
+    }
+
+    if (!projects) {
+      document.getElementById("projectResults").innerHTML =
+        `<div class="state-msg">Keine Ergebnisse. API-Antwort in der Browser-Konsole prüfen.</div>`;
       return;
     }
 
-    renderProjects(result.data?.project_matches || []);
+    renderProjects(projects);
   } catch (e) {
+    console.error("searchProjects Fehler:", e);
     document.getElementById("projectResults").innerHTML =
-      `<div class="state-msg">Fehler bei der Suche. Verbindung prüfen.</div>`;
+      `<div class="state-msg">Fehler: ${e.message}</div>`;
   }
 }
 
