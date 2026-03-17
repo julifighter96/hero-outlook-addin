@@ -492,6 +492,30 @@ async function createNewProject() {
 
 // ─── UPLOAD ───────────────────────────────────────────────────────────────────
 
+let _emailDocTypeId = null;
+
+async function resolveEmailDocTypeId() {
+  if (_emailDocTypeId) return _emailDocTypeId;
+  const data = await heroQuery(`{
+    customer_documents {
+      document_type { id name }
+    }
+  }`);
+  const docs = data?.data?.customer_documents || [];
+  const types = [...new Map(
+    docs.map(d => d.document_type).filter(Boolean).map(t => [t.id, t])
+  ).values()];
+  console.log("Verfügbare Dokumenttypen:", types.map(t => `${t.id}: ${t.name}`));
+  const match = types.find(t =>
+    /mail/i.test(t.name)
+  );
+  if (!match) {
+    console.warn("Kein E-Mail-Dokumenttyp gefunden. Verfügbar:", types.map(t => t.name));
+  }
+  _emailDocTypeId = match?.id || null;
+  return _emailDocTypeId;
+}
+
 async function uploadFileToHero(filename, base64Content, contentType) {
   // Schritt 1: Datei → UUID
   const uploadRes = await fetch("/api/hero?upload=1", {
@@ -513,21 +537,37 @@ async function uploadFileToHero(filename, base64Content, contentType) {
     throw new Error("Keine UUID erhalten: " + JSON.stringify(uploadData));
   }
 
-  // Schritt 2: upload_image via GraphQL v7
-  const gqlData = await heroQuery(`
-    mutation ($uuid: String!, $targetId: Int!) {
-      upload_image(
-        file_upload_uuid: $uuid,
-        target: project_match,
-        target_id: $targetId
-      ) { id }
-    }
-  `, { uuid, targetId: selectedProject.id });
+  // Schritt 2: Dokumenttyp "E-Mail" ermitteln
+  const docTypeId = await resolveEmailDocTypeId();
 
-  console.log("upload_image response:", gqlData);
+  // Schritt 3: upload_document via GraphQL v7
+  const mutation = docTypeId
+    ? `mutation ($uuid: String!, $targetId: Int!, $typeId: Int!) {
+        upload_document(
+          file_upload_uuid: $uuid,
+          target: project_match,
+          target_id: $targetId,
+          document: { document_type_id: $typeId }
+        ) { id }
+      }`
+    : `mutation ($uuid: String!, $targetId: Int!) {
+        upload_document(
+          file_upload_uuid: $uuid,
+          target: project_match,
+          target_id: $targetId,
+          document: {}
+        ) { id }
+      }`;
+
+  const vars = docTypeId
+    ? { uuid, targetId: selectedProject.id, typeId: docTypeId }
+    : { uuid, targetId: selectedProject.id };
+
+  const gqlData = await heroQuery(mutation, vars);
+  console.log("upload_document response:", gqlData);
 
   if (gqlData.errors) {
-    throw new Error("upload_image: " + JSON.stringify(gqlData.errors));
+    throw new Error("upload_document: " + JSON.stringify(gqlData.errors));
   }
 
   return gqlData;
