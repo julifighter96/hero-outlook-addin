@@ -4,6 +4,7 @@
 
 const HERO_GQL = "/api/hero";
 const STORAGE_KEY = "hero_addin_apikey";
+const DOC_TYPE_KEY = "hero_addin_doctype";
 
 let apiKey = "";
 let selectedProject = null;
@@ -513,9 +514,14 @@ async function loadDocumentTypes() {
     select.innerHTML = `<option value="">– kein Typ –</option>` +
       types.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
 
-    // E-Mail-Typ vorauswählen falls vorhanden
-    const emailType = types.find(t => /mail/i.test(t.name));
-    if (emailType) select.value = emailType.id;
+    // Zuletzt gewählten Typ wiederherstellen, sonst E-Mail-Typ vorauswählen
+    const saved = localStorage.getItem(DOC_TYPE_KEY);
+    if (saved && select.querySelector(`option[value="${saved}"]`)) {
+      select.value = saved;
+    } else {
+      const emailType = types.find(t => /mail/i.test(t.name));
+      if (emailType) select.value = emailType.id;
+    }
   } catch (e) {
     console.warn("Dokumenttypen konnten nicht geladen werden:", e);
   } finally {

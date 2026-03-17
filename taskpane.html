@@ -485,7 +485,7 @@
         Dokumenttyp
         <span id="docTypeLoading" style="font-size:11px;color:var(--text-muted);display:none;">wird geladen…</span>
       </label>
-      <select id="docTypeSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--card);">
+      <select id="docTypeSelect" onchange="localStorage.setItem('hero_addin_doctype', this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--card);">
         <option value="">– kein Typ –</option>
       </select>
     </div>
