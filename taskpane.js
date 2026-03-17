@@ -72,6 +72,7 @@ async function testConnection() {
     const test = await heroQuery(`{ contacts(first: 1) { id } }`);
     const ok = !!test.data;
     updateConnectionUI(ok ? "connected" : "disconnected");
+    if (ok) loadDocumentTypes();
     return ok;
   } catch (e) {
     updateConnectionUI("disconnected");
@@ -492,28 +493,34 @@ async function createNewProject() {
 
 // ─── UPLOAD ───────────────────────────────────────────────────────────────────
 
-let _emailDocTypeId = null;
+async function loadDocumentTypes() {
+  const select = document.getElementById("docTypeSelect");
+  const loading = document.getElementById("docTypeLoading");
+  if (!select || !apiKey) return;
 
-async function resolveEmailDocTypeId() {
-  if (_emailDocTypeId) return _emailDocTypeId;
-  const data = await heroQuery(`{
-    customer_documents {
-      document_type { id name }
-    }
-  }`);
-  const docs = data?.data?.customer_documents || [];
-  const types = [...new Map(
-    docs.map(d => d.document_type).filter(Boolean).map(t => [t.id, t])
-  ).values()];
-  console.log("Verfügbare Dokumenttypen:", types.map(t => `${t.id}: ${t.name}`));
-  const match = types.find(t =>
-    /mail/i.test(t.name)
-  );
-  if (!match) {
-    console.warn("Kein E-Mail-Dokumenttyp gefunden. Verfügbar:", types.map(t => t.name));
+  loading.style.display = "inline";
+  try {
+    const data = await heroQuery(`{
+      customer_documents {
+        document_type { id name }
+      }
+    }`);
+    const docs = data?.data?.customer_documents || [];
+    const types = [...new Map(
+      docs.map(d => d.document_type).filter(Boolean).map(t => [t.id, t])
+    ).values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    select.innerHTML = `<option value="">– kein Typ –</option>` +
+      types.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+
+    // E-Mail-Typ vorauswählen falls vorhanden
+    const emailType = types.find(t => /mail/i.test(t.name));
+    if (emailType) select.value = emailType.id;
+  } catch (e) {
+    console.warn("Dokumenttypen konnten nicht geladen werden:", e);
+  } finally {
+    loading.style.display = "none";
   }
-  _emailDocTypeId = match?.id || null;
-  return _emailDocTypeId;
 }
 
 async function uploadFileToHero(filename, base64Content, contentType) {
@@ -537,8 +544,9 @@ async function uploadFileToHero(filename, base64Content, contentType) {
     throw new Error("Keine UUID erhalten: " + JSON.stringify(uploadData));
   }
 
-  // Schritt 2: Dokumenttyp "E-Mail" ermitteln
-  const docTypeId = await resolveEmailDocTypeId();
+  // Schritt 2: Dokumenttyp aus Dropdown
+  const docTypeRaw = document.getElementById("docTypeSelect")?.value;
+  const docTypeId = docTypeRaw ? parseInt(docTypeRaw) : null;
 
   // Schritt 3: upload_document via GraphQL v7
   const mutation = docTypeId

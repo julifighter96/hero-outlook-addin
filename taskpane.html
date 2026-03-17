@@ -479,6 +479,17 @@
       </div>
     </div>
 
+    <!-- Document type -->
+    <div class="form-field" style="padding: 0 16px;">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        Dokumenttyp
+        <span id="docTypeLoading" style="font-size:11px;color:var(--text-muted);display:none;">wird geladen…</span>
+      </label>
+      <select id="docTypeSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--card);">
+        <option value="">– kein Typ –</option>
+      </select>
+    </div>
+
     <!-- Submit -->
     <button class="btn btn-primary" id="submitBtn" disabled onclick="submitToHero()">
       Projekt auswählen...
