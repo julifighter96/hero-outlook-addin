@@ -502,14 +502,11 @@ async function loadDocumentTypes() {
   loading.style.display = "inline";
   try {
     const data = await heroQuery(`{
-      customer_documents {
-        document_type { id name }
-      }
+      document_types { id name }
     }`);
-    const docs = data?.data?.customer_documents || [];
-    const types = [...new Map(
-      docs.map(d => d.document_type).filter(Boolean).map(t => [t.id, t])
-    ).values()].sort((a, b) => a.name.localeCompare(b.name));
+    const types = (data?.data?.document_types || [])
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     select.innerHTML = `<option value="">– kein Typ –</option>` +
       types.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
