@@ -102,6 +102,44 @@
             </ExtensionPoint>
 
           </DesktopFormFactor>
+
+          <!-- Mobile Form Factor -->
+          <MobileFormFactor>
+
+            <!-- Function File -->
+            <FunctionFile resid="Commands.Url"/>
+
+            <!-- Extension Point: MobileMessageReadCommandSurface -->
+            <ExtensionPoint xsi:type="MobileMessageReadCommandSurface">
+              <Group id="mobileMsgReadGroup">
+                <Label resid="GroupLabel"/>
+
+                <!-- Button: Upload zu HERO -->
+                <Control xsi:type="MobileButton" id="mobileMsgReadOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Icon>
+                    <bt:Image size="25" scale="1" resid="Icon.16x16"/>
+                    <bt:Image size="25" scale="2" resid="Icon.32x32"/>
+                    <bt:Image size="25" scale="3" resid="Icon.32x32"/>
+                    <bt:Image size="32" scale="1" resid="Icon.32x32"/>
+                    <bt:Image size="32" scale="2" resid="Icon.80x80"/>
+                    <bt:Image size="32" scale="3" resid="Icon.80x80"/>
+                    <bt:Image size="48" scale="1" resid="Icon.48x48"/>
+                    <bt:Image size="48" scale="2" resid="Icon.80x80"/>
+                    <bt:Image size="48" scale="3" resid="Icon.80x80"/>
+                    <bt:Image size="80" scale="1" resid="Icon.80x80"/>
+                    <bt:Image size="80" scale="2" resid="Icon.80x80"/>
+                    <bt:Image size="80" scale="3" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+
+              </Group>
+            </ExtensionPoint>
+
+          </MobileFormFactor>
         </Host>
       </Hosts>
 
@@ -110,6 +148,7 @@
         <bt:Images>
           <bt:Image id="Icon.16x16" DefaultValue="https://hero-outlook-addin.vercel.app/assets/favicon-16x16.png"/>
           <bt:Image id="Icon.32x32" DefaultValue="https://hero-outlook-addin.vercel.app/assets/favicon-32x32.png"/>
+          <bt:Image id="Icon.48x48" DefaultValue="https://hero-outlook-addin.vercel.app/assets/favicon-96x96.png"/>
           <bt:Image id="Icon.80x80" DefaultValue="https://hero-outlook-addin.vercel.app/assets/ms-icon-70x70.png"/>
         </bt:Images>
         <bt:Urls>

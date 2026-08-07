@@ -13,10 +13,9 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // API-Key aus Bearer-Header extrahieren
-  const authHeader = req.headers["authorization"] || "";
-  const apiKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!apiKey) return res.status(401).json({ error: "Authorization header missing" });
+  // Fest hinterlegter API-Key aus Vercel Environment Variable
+  const apiKey = process.env.HERO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "HERO_API_KEY ist auf dem Server nicht konfiguriert" });
 
   // ── Datei-Upload: REST v8 → gibt UUID zurück ─────────────────────────────
   if (req.query.upload === "1") {

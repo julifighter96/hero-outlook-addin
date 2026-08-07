@@ -3,10 +3,8 @@
  */
 
 const HERO_GQL = "/api/hero";
-const STORAGE_KEY = "hero_addin_apikey";
 const DOC_TYPE_KEY = "hero_addin_doctype";
 
-let apiKey = "";
 let selectedProject = null;
 let currentMode = "existing"; // "existing" | "new"
 let mailData = {};
@@ -16,14 +14,14 @@ let searchTimer = null;
 
 Office.onReady((info) => {
   if (info.host === Office.HostType.Outlook) {
-    loadSettings();
+    testConnection();
     loadMailData();
   }
 });
 
 if (typeof Office === "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
-    loadSettings();
+    testConnection();
     mailData = {
       subject: "[Test] Anfrage Elektroinstallation Neubau",
       from: "max.mustermann@example.de",
@@ -36,39 +34,10 @@ if (typeof Office === "undefined") {
   });
 }
 
-// ─── SETTINGS ─────────────────────────────────────────────────────────────────
-
-function loadSettings() {
-  try {
-    apiKey = localStorage.getItem(STORAGE_KEY) || "";
-    document.getElementById("apiKeyInput").value = apiKey;
-  } catch (e) {}
-
-  updateConnectionUI(apiKey ? "connected" : "disconnected");
-  if (!apiKey) toggleSettings();
-  else testConnection();
-}
-
-function saveSettings() {
-  apiKey = document.getElementById("apiKeyInput").value.trim();
-  try { localStorage.setItem(STORAGE_KEY, apiKey); } catch (e) {}
-
-  updateConnectionUI("checking");
-  testConnection().then((ok) => {
-    if (ok) {
-      showStatus("success", "✅ Verbindung zu HERO erfolgreich!");
-      toggleSettings();
-    } else {
-      showStatus("error", "❌ Verbindung fehlgeschlagen – API-Key prüfen.");
-    }
-  });
-}
-
-function toggleSettings() {
-  document.getElementById("settingsPanel").classList.toggle("open");
-}
+// ─── CONNECTION ───────────────────────────────────────────────────────────────
 
 async function testConnection() {
+  updateConnectionUI("checking");
   try {
     const test = await heroQuery(`{ contacts(first: 1) { id } }`);
     const ok = !!test.data;
@@ -143,7 +112,6 @@ async function heroQuery(query, variables) {
   const res = await fetch(HERO_GQL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(variables ? { query, variables } : { query })
@@ -187,11 +155,6 @@ function handleSearch() {
 }
 
 async function searchProjects(term) {
-  if (!apiKey) {
-    showStatus("error", "Bitte zuerst API-Key in den Einstellungen hinterlegen.");
-    return;
-  }
-
   const s = term.toLowerCase();
 
   try {
@@ -376,8 +339,6 @@ function generateEmailPdf() {
 // ─── SUBMIT ───────────────────────────────────────────────────────────────────
 
 async function submitToHero() {
-  if (!apiKey) return;
-
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:white"></span> Wird verarbeitet...`;
@@ -476,7 +437,6 @@ async function createNewProject() {
   const res = await fetch("/api/hero?create=1", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -497,7 +457,7 @@ async function createNewProject() {
 async function loadDocumentTypes() {
   const select = document.getElementById("docTypeSelect");
   const loading = document.getElementById("docTypeLoading");
-  if (!select || !apiKey) return;
+  if (!select) return;
 
   loading.style.display = "inline";
   try {
@@ -531,7 +491,6 @@ async function uploadFileToHero(filename, base64Content, contentType) {
   const uploadRes = await fetch("/api/hero?upload=1", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ filename, content_base64: base64Content, content_type: contentType }),
